@@ -1,5 +1,5 @@
 import re
-from app.models.resume import ResumeInfo
+from app.schemas.resume import PersonalInfo
 
 
 def extract_resume_info(text: str):
@@ -13,7 +13,7 @@ def extract_resume_info(text: str):
     lines = [line.strip() for line in text.split("\n") if line.strip()]
     name = lines[0] if lines else None
 
-    return ResumeInfo(
+    return PersonalInfo(
         name=name,
         email=email,
         phone=phone
