@@ -1,16 +1,5 @@
-# Python
-backend/.venv/
+venv/
 __pycache__/
 *.pyc
-
-# Environment variables
 .env
-
-# Node
-frontend/node_modules/
-
-# VS Code
-.vscode/
-
-# Logs
-*.log
+uploads/
