@@ -4,6 +4,7 @@ import shutil
 
 from app.services.resume_parser import extract_text_from_pdf
 from app.services.resume_extractor import extract_resume_info
+from app.services.skill_extractor import extract_skills
 
 router = APIRouter()
 
@@ -22,10 +23,12 @@ async def upload_resume(file: UploadFile = File(...)):
     extracted_text = extract_text_from_pdf(file_path)
 
     resume_info = extract_resume_info(extracted_text)
+    skills = extract_skills(extracted_text)
 
     return {
         "filename": file.filename,
         "message": "Resume uploaded and parsed successfully!",
         "resume_info": resume_info,
+        "skills": skills,
         "text": extracted_text
     }
