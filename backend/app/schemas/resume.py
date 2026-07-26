@@ -15,8 +15,22 @@ class Education(BaseModel):
     graduation_year: Optional[str] = None
 
 
+class Project(BaseModel):
+    title: str
+    description: str
+
+
+class Experience(BaseModel):
+    company: str
+    role: str
+    duration: str
+
+
 class Resume(BaseModel):
     personal_info: PersonalInfo
     skills: List[str]
     education: Education
+    projects: List[Project] = []
+    experience: List[Experience] = []
+    certifications: List[str] = []
     raw_text: str

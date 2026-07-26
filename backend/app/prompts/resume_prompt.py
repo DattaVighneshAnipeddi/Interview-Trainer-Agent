@@ -5,22 +5,22 @@ Analyze the following resume.
 
 Extract the following information and return ONLY valid JSON.
 
-{
+{{
     "projects": [
-        {
+        {{
             "title": "",
             "description": ""
-        }
+        }}
     ],
     "experience": [
-        {
+        {{
             "company": "",
             "role": "",
             "duration": ""
-        }
+        }}
     ],
     "certifications": []
-}
+}}
 
 Resume:
 
