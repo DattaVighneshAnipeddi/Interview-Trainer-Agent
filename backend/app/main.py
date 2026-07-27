@@ -1,6 +1,8 @@
 from fastapi import FastAPI
+
 from app.routers import upload
 from app.routers import gemini
+from app.routers import interview
 
 app = FastAPI(
     title="Interview Trainer Agent",
@@ -10,7 +12,7 @@ app = FastAPI(
 
 app.include_router(upload.router)
 app.include_router(gemini.router)
-
+app.include_router(interview.router)
 
 @app.get("/")
 def home():

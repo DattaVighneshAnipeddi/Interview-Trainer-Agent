@@ -16,11 +16,12 @@ def parse_resume_with_ai(resume_text: str):
 
     try:
         return json.loads(cleaned)
-    except json.JSONDecodeError as e:
-    print(f"Gemini JSON parsing failed: {e}")
 
-    return {
-        "projects": [],
-        "experience": [],
-        "certifications": []
-    }
+    except json.JSONDecodeError as e:
+        print(f"Gemini JSON parsing failed: {e}")
+
+        return {
+            "projects": [],
+            "experience": [],
+            "certifications": []
+        }

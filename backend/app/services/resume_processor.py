@@ -1,3 +1,4 @@
+from app.rag.vector_store import store_resume
 from app.services.ai_resume_parser import parse_resume_with_ai
 from app.services.resume_parser import extract_text_from_pdf
 from app.services.resume_extractor import extract_resume_info
@@ -19,7 +20,11 @@ def process_resume(file_path: str):
         projects=ai_data.get("projects", []),
         experience=ai_data.get("experience", []),
         certifications=ai_data.get("certifications", []),
-        raw_text=text
+        raw_text=text,
     )
+
+    resume_id = store_resume(resume)
+
+    print(f"Resume stored successfully: {resume_id}")
 
     return resume
