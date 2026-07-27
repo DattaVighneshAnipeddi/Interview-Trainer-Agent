@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.services.interview_service import generate_interview_questions
@@ -13,11 +13,27 @@ class InterviewRequest(BaseModel):
     role: str
 
 
-@router.post("/questions")
-def generate_questions(request: InterviewRequest):
-    questions = generate_interview_questions(request.role)
+class InterviewResponse(BaseModel):
+    role: str
+    questions: list[str]
 
-    return {
-        "role": request.role,
-        "questions": questions
-    }
+
+@router.post(
+    "/questions",
+    response_model=InterviewResponse
+)
+def generate_questions(request: InterviewRequest):
+
+    try:
+        questions = generate_interview_questions(request.role)
+
+        return InterviewResponse(
+            role=request.role,
+            questions=questions
+        )
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to generate interview questions: {str(e)}"
+        )
