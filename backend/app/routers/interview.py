@@ -3,6 +3,7 @@ from pydantic import BaseModel
 
 from app.services.interview_service import generate_interview_questions
 from app.services.evaluation_service import evaluate_answer
+from app.schemas.evaluation import EvaluationResult
 
 router = APIRouter(
     prefix="/interview",
@@ -63,7 +64,10 @@ def generate_questions(request: InterviewRequest):
 # Evaluate Answer
 # -----------------------------
 
-@router.post("/evaluate")
+@router.post(
+    "/evaluate",
+    response_model=EvaluationResult
+)
 def evaluate(request: EvaluationRequest):
 
     try:
