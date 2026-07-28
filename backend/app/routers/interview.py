@@ -1,19 +1,21 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from app.services.interview_service import generate_interview_questions
-from app.services.evaluation_service import evaluate_answer
 from app.schemas.evaluation import EvaluationResult
+from app.schemas.interview import InterviewQuestionsResponse
+from app.schemas.session import (
+    CreateSessionRequest,
+    CreateSessionResponse,
+)
+from app.services.evaluation_service import evaluate_answer
+from app.services.interview_service import generate_interview_questions
+from app.services.session_service import create_session
 
 router = APIRouter(
     prefix="/interview",
     tags=["Interview"]
 )
 
-
-# -----------------------------
-# Request Models
-# -----------------------------
 
 class InterviewRequest(BaseModel):
     role: str
@@ -24,32 +26,19 @@ class EvaluationRequest(BaseModel):
     answer: str
 
 
-# -----------------------------
-# Response Models
-# -----------------------------
-
-class InterviewResponse(BaseModel):
-    role: str
-    questions: str
-
-
-# -----------------------------
-# Generate Questions
-# -----------------------------
-
 @router.post(
     "/questions",
-    response_model=InterviewResponse
+    response_model=InterviewQuestionsResponse
 )
 def generate_questions(request: InterviewRequest):
 
     try:
 
-        questions = generate_interview_questions(request.role)
+        result = generate_interview_questions(request.role)
 
-        return InterviewResponse(
+        return InterviewQuestionsResponse(
             role=request.role,
-            questions=questions
+            questions=result.questions
         )
 
     except Exception as e:
@@ -60,9 +49,35 @@ def generate_questions(request: InterviewRequest):
         )
 
 
-# -----------------------------
-# Evaluate Answer
-# -----------------------------
+@router.post(
+    "/session",
+    response_model=CreateSessionResponse
+)
+def start_session(request: CreateSessionRequest):
+
+    try:
+
+        result = generate_interview_questions(request.role)
+
+        session = create_session(
+            role=request.role,
+            questions=result.questions
+        )
+
+        return CreateSessionResponse(
+            session_id=session.session_id,
+            role=session.role,
+            current_question=session.questions[0],
+            total_questions=len(session.questions)
+        )
+
+    except Exception as e:
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to create session: {str(e)}"
+        )
+
 
 @router.post(
     "/evaluate",

@@ -1,13 +1,10 @@
 from app.prompts.interview_prompt import INTERVIEW_PROMPT
 from app.rag.retriever import retrieve_context
+from app.schemas.interview import InterviewQuestions
 from app.services.gemini_service import ask_gemini
 
 
 def generate_interview_questions(role: str):
-    """
-    Generate personalized interview questions based on
-    the candidate's resume and target job role.
-    """
 
     retrieval_result = retrieve_context(role)
 
@@ -27,11 +24,9 @@ def generate_interview_questions(role: str):
         context=context
     )
 
-    response = ask_gemini(prompt)
-    questions = re.split(r"\n\d+\.\s*", response.strip())
+    result = ask_gemini(
+        prompt,
+        response_schema=InterviewQuestions
+    )
 
-    questions = [q.strip() for q in questions if q.strip()]
-
-    return questions
-
-    return response
+    return result

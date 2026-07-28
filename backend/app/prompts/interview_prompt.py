@@ -22,12 +22,21 @@ Instructions:
 5. If the resume contains projects, ask questions about them.
 6. If the resume contains internships or experience, include experience-based questions.
 7. Do not invent information that is not present in the resume.
-8. Return only the numbered list of questions.
 
-Example Output:
+Return ONLY valid JSON in the following format:
 
-1. Explain the architecture of your Interview Trainer project.
-2. Why did you choose FastAPI instead of Flask?
-3. How does ChromaDB help in your project?
-...
+{{
+    "questions": [
+        "Question 1",
+        "Question 2",
+        "Question 3",
+        "Question 4",
+        "Question 5",
+        "Question 6",
+        "Question 7",
+        "Question 8",
+        "Question 9",
+        "Question 10"
+    ]
+}}
 """
