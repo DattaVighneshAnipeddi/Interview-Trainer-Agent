@@ -1,15 +1,25 @@
 from google import genai
-from app.config import GEMINI_API_KEY
+from google.genai import types
 
 client = genai.Client(api_key=GEMINI_API_KEY)
 
 
-def ask_gemini(prompt: str) -> str:
-    try:
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt,
+def ask_gemini(
+    prompt: str,
+    response_schema=None,
+):
+    config = None
+
+    if response_schema:
+        config = types.GenerateContentConfig(
+            response_mime_type="application/json",
+            response_schema=response_schema,
         )
-        return response.text
-    except Exception as e:
-        raise RuntimeError(f"Gemini API call failed: {e}")
+
+    response = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=prompt,
+        config=config,
+    )
+
+    return response.text
