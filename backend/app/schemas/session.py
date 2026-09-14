@@ -26,3 +26,14 @@ class CreateSessionResponse(BaseModel):
     role: str
     current_question: str
     total_questions: int
+
+
+class SubmitAnswerRequest(BaseModel):
+    answer: str
+
+
+class SubmitAnswerResponse(BaseModel):
+    evaluation: EvaluationResult
+    next_question: str | None
+    remaining_questions: int
+    interview_completed: bool
