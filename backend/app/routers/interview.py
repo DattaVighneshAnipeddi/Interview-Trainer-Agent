@@ -1,3 +1,4 @@
+from app.services.gemini_service import GeminiServiceUnavailable
 from app.services.report_service import generate_interview_report
 from app.services.session_service import (
     create_session,
@@ -208,6 +209,12 @@ def submit_interview_answer(
         raise HTTPException(
             status_code=400,
             detail=str(e)
+        )
+
+    except GeminiServiceUnavailable as e:
+        raise HTTPException(
+            status_code=503,
+            detail=str(e),
         )
 
     except Exception as e:
