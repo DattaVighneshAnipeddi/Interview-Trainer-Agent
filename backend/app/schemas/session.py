@@ -1,20 +1,19 @@
-from pydantic import BaseModel
-from typing import List
-
 from app.schemas.evaluation import EvaluationResult
+from pydantic import BaseModel, Field
+
+
+class InterviewResponse(BaseModel):
+    question: str
+    answer: str
+    evaluation: EvaluationResult
 
 
 class InterviewSession(BaseModel):
     session_id: str
     role: str
-
-    questions: List[str]
-
+    questions: list[str]
     current_question: int = 0
-
-    answers: List[str] = []
-
-    evaluations: List[EvaluationResult] = []
+    responses: list[InterviewResponse] = Field(default_factory=list)
 
 
 class CreateSessionRequest(BaseModel):
