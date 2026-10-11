@@ -1,10 +1,12 @@
-from google.genai import errors
-from app.config import GEMINI_API_KEY
-from google.genai import types
-from google import genai
-import time
-import random
+
 import logging
+import random
+import time
+
+from google import genai
+from google.genai import errors, types
+
+from app.config import GEMINI_API_KEY
 
 
 logger = logging.getLogger(__name__)
@@ -14,6 +16,10 @@ class GeminiServiceUnavailable(Exception):
     """Raised when Gemini remains unavailable after retries."""
 
 
+class GeminiQuotaExceeded(Exception):
+    """Raised when Gemini's API quota or rate limit is exceeded."""
+
+
 client = genai.Client(api_key=GEMINI_API_KEY)
 
 MAX_RETRIES = 3
@@ -21,13 +27,29 @@ INITIAL_RETRY_DELAY = 1.0
 MAX_RETRY_DELAY = 8.0
 
 
-def ask_gemini(
-    prompt: str,
-    response_schema=None,
-):
+def is_retryable_error(exc: Exception) -> bool:
+    """Return True only for temporary errors worth retrying."""
+
+    if isinstance(exc, errors.APIError):
+        return exc.code in (500, 502, 503, 504)
+
+    status_code = getattr(exc, "status_code", None)
+
+    if status_code in (500, 502, 503, 504):
+        return True
+
+    response = getattr(exc, "response", None)
+    response_status = getattr(response, "status_code", None)
+
+    return response_status in (500, 502, 503, 504)
+
+
+def ask_gemini(prompt: str, response_schema=None):
+    """Send a prompt to Gemini with retry handling for temporary failures."""
+
     config = None
 
-    if response_schema:
+    if response_schema is not None:
         config = types.GenerateContentConfig(
             response_mime_type="application/json",
             response_schema=response_schema,
@@ -41,64 +63,59 @@ def ask_gemini(
                 config=config,
             )
 
-            if response_schema:
+            if response_schema is not None:
                 if response.parsed is None:
                     raise ValueError(
-                        "Gemini returned no structured response"
+                        "Gemini returned no structured response."
                     )
                 return response.parsed
 
             if response.text is None:
                 raise ValueError(
-                    "Gemini returned an empty response"
+                    "Gemini returned an empty response."
                 )
 
             return response.text
 
         except Exception as exc:
+            # Quota/rate-limit errors must not be retried here.
+            if isinstance(exc, errors.APIError) and exc.code == 429:
+                raise GeminiQuotaExceeded(
+                    "Gemini API quota or rate limit exceeded. "
+                    "Please try again later or check your API quota."
+                ) from exc
+
+            # Do not retry authentication, invalid requests, or other
+            # errors that are not classified as temporary.
             if not is_retryable_error(exc):
-                logger.exception("Gemini request failed")
+                logger.exception("Gemini request failed.")
                 raise
 
+            # Three retries means a maximum of four total attempts.
             if attempt == MAX_RETRIES:
-                logger.exception(
-                    "Gemini retries exhausted after %s attempts",
+                logger.error(
+                    "Gemini retries exhausted after %s attempts.",
                     attempt + 1,
+                    exc_info=True,
                 )
                 raise GeminiServiceUnavailable(
                     "Gemini is temporarily unavailable. "
                     "Please try again later."
                 ) from exc
 
-            delay = min(
-                INITIAL_RETRY_DELAY * (2 ** attempt),
-                MAX_RETRY_DELAY,
-            )
-            delay += random.uniform(0, 0.25)
+        # Reached only after a retryable failure with attempts remaining.
+        delay = min(
+            INITIAL_RETRY_DELAY * (2 ** attempt),
+            MAX_RETRY_DELAY,
+        )
+        delay += random.uniform(0, 0.25)
 
-            logger.warning(
-                "Temporary Gemini failure. Retrying in %.2f seconds "
-                "(attempt %s of %s)",
-                delay,
-                attempt + 1,
-                MAX_RETRIES,
-            )
+        logger.warning(
+            "Temporary Gemini failure. Retrying in %.2f seconds "
+            "(attempt %s of %s).",
+            delay,
+            attempt + 1,
+            MAX_RETRIES,
+        )
 
-            time.sleep(delay)
-
-
-def is_retryable_error(exc: Exception) -> bool:
-    """Return True for temporary Gemini API errors."""
-
-    if isinstance(exc, errors.APIError):
-        return exc.code in (429, 500, 502, 503, 504)
-
-    status_code = getattr(exc, "status_code", None)
-
-    if status_code in (429, 500, 502, 503, 504):
-        return True
-
-    response = getattr(exc, "response", None)
-    response_status = getattr(response, "status_code", None)
-
-    return response_status in (429, 500, 502, 503, 504)
+        time.sleep(delay)

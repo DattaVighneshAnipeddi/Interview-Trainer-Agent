@@ -3,3 +3,9 @@ __pycache__/
 *.pyc
 .env
 uploads/
+
+# Local vector database
+backend/chroma_db/
+
+# Python test and cache artifacts
+.pytest_cache/
