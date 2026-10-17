@@ -4,15 +4,17 @@ from app.services.session_service import get_session
 
 def generate_interview_report(
     session_id: str,
+    user_id: int,
 ) -> InterviewReport:
+    """Generate a report only for a session owned by the user."""
 
-    # Retrieve the interview session
-    session = get_session(session_id)
+    # Retrieve the session only if it belongs to this user.
+    session = get_session(session_id, user_id)
 
     if session is None:
         raise ValueError("Interview session not found")
 
-    # Only generate a final report for completed interviews
+    # Only generate a final report for completed interviews.
     if session.current_question < len(session.questions):
         raise ValueError("Interview session is not yet completed")
 
@@ -21,7 +23,7 @@ def generate_interview_report(
     if not responses:
         raise ValueError("No interview responses are available")
 
-    # Calculate average scores
+    # Calculate average scores.
     total_responses = len(responses)
 
     overall_score = sum(
@@ -44,7 +46,7 @@ def generate_interview_report(
         for response in responses
     ) / total_responses
 
-    # Collect question-by-question feedback
+    # Collect question-by-question feedback.
     question_reports = []
 
     for response in responses:
@@ -64,7 +66,7 @@ def generate_interview_report(
             )
         )
 
-    # Collect strengths, weaknesses, and recommendations
+    # Collect strengths, weaknesses, and recommendations.
     strengths = list(dict.fromkeys(
         response.evaluation.strengths
         for response in responses
@@ -83,7 +85,7 @@ def generate_interview_report(
         if response.evaluation.suggestions.strip()
     ))
 
-    # Build the final report
+    # Build the final report.
     return InterviewReport(
         session_id=session.session_id,
         role=session.role,

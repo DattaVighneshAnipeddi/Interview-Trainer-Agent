@@ -10,6 +10,7 @@ class InterviewResponse(BaseModel):
 
 class InterviewSession(BaseModel):
     session_id: str
+    user_id: int
     role: str
     questions: list[str]
     current_question: int = 0

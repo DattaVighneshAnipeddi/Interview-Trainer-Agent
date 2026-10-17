@@ -1,28 +1,27 @@
-
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
-
-from app.services.gemini_service import (
-    GeminiQuotaExceeded,
-    GeminiServiceUnavailable,
-)
-from app.services.report_service import generate_interview_report
+from app.services.evaluation_service import evaluate_answer
+from app.services.interview_service import generate_interview_questions
 from app.services.session_service import (
     create_session,
     get_session,
     submit_answer,
 )
-from app.services.interview_service import generate_interview_questions
-from app.services.evaluation_service import evaluate_answer
-
+from app.services.report_service import generate_interview_report
+from app.services.gemini_service import (
+    GeminiQuotaExceeded,
+    GeminiServiceUnavailable,
+)
+from app.schemas.evaluation import EvaluationResult
+from app.schemas.interview import InterviewQuestionsResponse
 from app.schemas.session import (
     CreateSessionRequest,
     CreateSessionResponse,
     SubmitAnswerRequest,
     SubmitAnswerResponse,
 )
-from app.schemas.interview import InterviewQuestionsResponse
-from app.schemas.evaluation import EvaluationResult
+from app.schemas.auth import UserResponse
+from app.auth_dependencies import get_current_user
+from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, HTTPException
 
 
 router = APIRouter(
@@ -52,16 +51,10 @@ def handle_gemini_error(exc: Exception) -> HTTPException:
     """Convert known Gemini service errors into HTTP responses."""
 
     if isinstance(exc, GeminiQuotaExceeded):
-        return HTTPException(
-            status_code=429,
-            detail=str(exc),
-        )
+        return HTTPException(status_code=429, detail=str(exc))
 
     if isinstance(exc, GeminiServiceUnavailable):
-        return HTTPException(
-            status_code=503,
-            detail=str(exc),
-        )
+        return HTTPException(status_code=503, detail=str(exc))
 
     return HTTPException(
         status_code=500,
@@ -81,10 +74,7 @@ def generate_questions(request: InterviewRequest):
     role = request.role.strip()
 
     if not role:
-        raise HTTPException(
-            status_code=400,
-            detail="Role cannot be empty",
-        )
+        raise HTTPException(status_code=400, detail="Role cannot be empty")
 
     try:
         result = generate_interview_questions(role)
@@ -112,14 +102,14 @@ def generate_questions(request: InterviewRequest):
     "/session",
     response_model=CreateSessionResponse,
 )
-def start_session(request: CreateSessionRequest):
+def start_session(
+    request: CreateSessionRequest,
+    current_user: UserResponse = Depends(get_current_user),
+):
     role = request.role.strip()
 
     if not role:
-        raise HTTPException(
-            status_code=400,
-            detail="Role cannot be empty",
-        )
+        raise HTTPException(status_code=400, detail="Role cannot be empty")
 
     try:
         result = generate_interview_questions(role)
@@ -131,6 +121,7 @@ def start_session(request: CreateSessionRequest):
             )
 
         session = create_session(
+            user_id=current_user.user_id,
             role=role,
             questions=result.questions,
         )
@@ -166,8 +157,9 @@ def start_session(request: CreateSessionRequest):
 def submit_interview_answer(
     session_id: str,
     request: SubmitAnswerRequest,
+    current_user: UserResponse = Depends(get_current_user),
 ):
-    session = get_session(session_id)
+    session = get_session(session_id, current_user.user_id)
 
     if session is None:
         raise HTTPException(
@@ -192,20 +184,17 @@ def submit_interview_answer(
     current_question = session.questions[session.current_question]
 
     try:
-        evaluation = evaluate_answer(
-            current_question,
-            answer,
-        )
+        evaluation = evaluate_answer(current_question, answer)
 
         updated_session = submit_answer(
             session_id,
+            current_user.user_id,
             answer,
             evaluation,
         )
 
         interview_completed = (
-            updated_session.current_question
-            >= len(updated_session.questions)
+            updated_session.current_question >= len(updated_session.questions)
         )
 
         if interview_completed:
@@ -228,10 +217,7 @@ def submit_interview_answer(
         )
 
     except ValueError as exc:
-        raise HTTPException(
-            status_code=400,
-            detail=str(exc),
-        ) from exc
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     except (GeminiQuotaExceeded, GeminiServiceUnavailable) as exc:
         raise handle_gemini_error(exc) from exc
@@ -268,10 +254,7 @@ def evaluate(request: EvaluationRequest):
         )
 
     try:
-        return evaluate_answer(
-            question,
-            answer,
-        )
+        return evaluate_answer(question, answer)
 
     except (GeminiQuotaExceeded, GeminiServiceUnavailable) as exc:
         raise handle_gemini_error(exc) from exc
@@ -287,12 +270,16 @@ def evaluate(request: EvaluationRequest):
 # Final Interview Report
 # -----------------------------
 
-@router.get(
-    "/session/{session_id}/report",
-)
-def get_interview_report(session_id: str):
+@router.get("/session/{session_id}/report")
+def get_interview_report(
+    session_id: str,
+    current_user: UserResponse = Depends(get_current_user),
+):
     try:
-        return generate_interview_report(session_id)
+        return generate_interview_report(
+            session_id,
+            current_user.user_id,
+        )
 
     except ValueError as exc:
         message = str(exc)

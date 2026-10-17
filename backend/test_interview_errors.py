@@ -2,13 +2,41 @@
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.database import init_db, get_connection
+from app.auth_dependencies import get_current_user
+from app.schemas.auth import UserResponse
 from app.schemas.evaluation import EvaluationResult
-from app.services.session_service import (
-    create_session,
-    submit_answer,
-)
+from app.services.session_service import create_session, submit_answer
+
+
+TEST_USER_ID = 1
 
 client = TestClient(app)
+
+
+def override_get_current_user():
+    return UserResponse(
+        user_id=TEST_USER_ID,
+        name="Test User",
+        email="test@example.com",
+        role="user",
+    )
+
+
+app.dependency_overrides[get_current_user] = override_get_current_user
+
+
+def ensure_test_user():
+    init_db()
+    with get_connection() as connection:
+        connection.execute(
+            """
+            INSERT OR IGNORE INTO users
+                (user_id, name, email, password_hash)
+            VALUES (?, ?, ?, ?)
+            """,
+            (TEST_USER_ID, "Test User", "test@example.com", "test-hash"),
+        )
 
 
 def make_evaluation():
@@ -44,7 +72,10 @@ def test_report_for_unknown_session():
 
 
 def test_report_before_interview_completion():
+    ensure_test_user()
+
     session = create_session(
+        user_id=TEST_USER_ID,
         role="Python Developer",
         questions=["What is Python?", "What is a REST API?"],
     )
@@ -58,13 +89,17 @@ def test_report_before_interview_completion():
 
 
 def test_answer_after_interview_completion():
+    ensure_test_user()
+
     session = create_session(
+        user_id=TEST_USER_ID,
         role="Python Developer",
         questions=["What is Python?"],
     )
 
     submit_answer(
         session.session_id,
+        TEST_USER_ID,
         "Python is a programming language.",
         make_evaluation(),
     )

@@ -1,10 +1,11 @@
-
-import sqlite3
-from contextlib import contextmanager
-from pathlib import Path
 from typing import Iterator
+from pathlib import Path
+from contextlib import contextmanager
+import sqlite3
 
-DATABASE_PATH = Path(__file__).resolve().parent.parent / "interview_trainer.db"
+DATABASE_PATH = (
+    Path(__file__).resolve().parent.parent / "interview_trainer.db"
+)
 
 
 @contextmanager
@@ -25,8 +26,23 @@ def get_connection() -> Iterator[sqlite3.Connection]:
 
 
 def init_db() -> None:
-    """Create the interview sessions table if it does not exist."""
+    """Create database tables and migrate existing sessions safely."""
     with get_connection() as connection:
+        # 1. Create the users table first.
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                user_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                email TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL,
+                role TEXT NOT NULL DEFAULT 'user',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+
+        # 2. Create the interview sessions table.
         connection.execute(
             """
             CREATE TABLE IF NOT EXISTS interview_sessions (
@@ -40,3 +56,20 @@ def init_db() -> None:
             )
             """
         )
+
+        # 3. Migrate existing databases to add user ownership.
+        columns = {
+            row["name"]
+            for row in connection.execute(
+                "PRAGMA table_info(interview_sessions)"
+            ).fetchall()
+        }
+
+        if "user_id" not in columns:
+            connection.execute(
+                """
+                ALTER TABLE interview_sessions
+                ADD COLUMN user_id INTEGER
+                REFERENCES users(user_id)
+                """
+            )

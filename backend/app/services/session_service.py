@@ -1,4 +1,3 @@
-
 import json
 import uuid
 
@@ -14,12 +13,13 @@ def _save_session(session: InterviewSession) -> None:
             """
             INSERT INTO interview_sessions (
                 session_id,
+                user_id,
                 role,
                 questions_json,
                 current_question,
                 responses_json
             )
-            VALUES (?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT(session_id) DO UPDATE SET
                 role = excluded.role,
                 questions_json = excluded.questions_json,
@@ -29,22 +29,29 @@ def _save_session(session: InterviewSession) -> None:
             """,
             (
                 session.session_id,
+                session.user_id,
                 session.role,
                 json.dumps(session.questions),
                 session.current_question,
                 json.dumps(
-                    [response.model_dump() for response in session.responses]
+                    [
+                        response.model_dump()
+                        for response in session.responses
+                    ]
                 ),
             ),
         )
 
 
 def create_session(
+    user_id: int,
     role: str,
     questions: list[str],
 ) -> InterviewSession:
+    """Create a new interview session owned by a user."""
     session = InterviewSession(
         session_id=str(uuid.uuid4()),
+        user_id=user_id,
         role=role,
         questions=questions,
     )
@@ -53,16 +60,20 @@ def create_session(
     return session
 
 
-def get_session(session_id: str) -> InterviewSession | None:
+def get_session(
+    session_id: str,
+    user_id: int,
+) -> InterviewSession | None:
+    """Retrieve a session only if it belongs to the requesting user."""
     with get_connection() as connection:
         row = connection.execute(
             """
-            SELECT session_id, role, questions_json,
+            SELECT session_id, user_id, role, questions_json,
                    current_question, responses_json
             FROM interview_sessions
-            WHERE session_id = ?
+            WHERE session_id = ? AND user_id = ?
             """,
-            (session_id,),
+            (session_id, user_id),
         ).fetchone()
 
     if row is None:
@@ -70,6 +81,7 @@ def get_session(session_id: str) -> InterviewSession | None:
 
     return InterviewSession(
         session_id=row["session_id"],
+        user_id=row["user_id"],
         role=row["role"],
         questions=json.loads(row["questions_json"]),
         current_question=row["current_question"],
@@ -82,10 +94,12 @@ def get_session(session_id: str) -> InterviewSession | None:
 
 def submit_answer(
     session_id: str,
+    user_id: int,
     answer: str,
     evaluation: EvaluationResult,
 ) -> InterviewSession:
-    session = get_session(session_id)
+    """Submit an answer only to a session owned by the user."""
+    session = get_session(session_id, user_id)
 
     if session is None:
         raise ValueError("Interview session not found")

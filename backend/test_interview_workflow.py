@@ -4,10 +4,40 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.database import init_db, get_connection
+from app.auth_dependencies import get_current_user
+from app.schemas.auth import UserResponse
 from app.schemas.evaluation import EvaluationResult
 
 
+TEST_USER_ID = 1
+
 client = TestClient(app)
+
+
+def override_get_current_user():
+    return UserResponse(
+        user_id=TEST_USER_ID,
+        name="Test User",
+        email="test@example.com",
+        role="user",
+    )
+
+
+app.dependency_overrides[get_current_user] = override_get_current_user
+
+
+def ensure_test_user():
+    init_db()
+    with get_connection() as connection:
+        connection.execute(
+            """
+            INSERT OR IGNORE INTO users
+                (user_id, name, email, password_hash)
+            VALUES (?, ?, ?, ?)
+            """,
+            (TEST_USER_ID, "Test User", "test@example.com", "test-hash"),
+        )
 
 
 def make_evaluation(score: float) -> EvaluationResult:
@@ -24,6 +54,8 @@ def make_evaluation(score: float) -> EvaluationResult:
 
 
 def test_complete_interview_workflow():
+    ensure_test_user()
+
     questions = [
         "What is Python?",
         "What is a REST API?",
@@ -61,7 +93,9 @@ def test_complete_interview_workflow():
         # 2. Submit the first answer.
         response = client.post(
             f"/interview/session/{session_id}/answer",
-            json={"answer": "Python is a high-level programming language."},
+            json={
+                "answer": "Python is a high-level programming language."
+            },
         )
 
         assert response.status_code == 200, response.text
@@ -75,7 +109,9 @@ def test_complete_interview_workflow():
         # 3. Submit the second and final answer.
         response = client.post(
             f"/interview/session/{session_id}/answer",
-            json={"answer": "A REST API allows systems to communicate over HTTP."},
+            json={
+                "answer": "A REST API allows systems to communicate over HTTP."
+            },
         )
 
         assert response.status_code == 200, response.text

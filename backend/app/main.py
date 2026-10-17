@@ -1,4 +1,4 @@
-
+from app.routers import auth
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -24,6 +24,7 @@ app = FastAPI(
 app.include_router(upload.router)
 app.include_router(gemini.router)
 app.include_router(interview.router)
+app.include_router(auth.router)
 
 
 @app.get("/")
