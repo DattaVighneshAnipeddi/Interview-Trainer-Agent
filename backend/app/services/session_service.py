@@ -121,3 +121,49 @@ def submit_answer(
     _save_session(session)
 
     return session
+
+
+def get_user_interview_history(
+    user_id: int,
+) -> list[dict]:
+    """Return interview history belonging only to the specified user."""
+    with get_connection() as connection:
+        rows = connection.execute(
+            """
+            SELECT
+                session_id,
+                role,
+                questions_json,
+                current_question,
+                created_at,
+                updated_at
+            FROM interview_sessions
+            WHERE user_id = ?
+            ORDER BY updated_at DESC, created_at DESC
+            """,
+            (user_id,),
+        ).fetchall()
+
+    history = []
+
+    for row in rows:
+        total_questions = len(json.loads(row["questions_json"]))
+        answered_questions = row["current_question"]
+
+        history.append(
+            {
+                "session_id": row["session_id"],
+                "role": row["role"],
+                "total_questions": total_questions,
+                "answered_questions": answered_questions,
+                "status": (
+                    "completed"
+                    if answered_questions >= total_questions
+                    else "in_progress"
+                ),
+                "created_at": row["created_at"],
+                "updated_at": row["updated_at"],
+            }
+        )
+
+    return history

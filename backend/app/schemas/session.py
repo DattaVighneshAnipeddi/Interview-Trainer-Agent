@@ -37,3 +37,14 @@ class SubmitAnswerResponse(BaseModel):
     next_question: str | None
     remaining_questions: int
     interview_completed: bool
+
+
+class InterviewHistoryItem(BaseModel):
+    session_id: str
+    role: str
+    total_questions: int
+    answered_questions: int
+    status: str
+    created_at: str
+    updated_at: str
+
