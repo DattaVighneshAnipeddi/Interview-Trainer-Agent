@@ -1,5 +1,5 @@
 from app.schemas.evaluation import EvaluationResult
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class InterviewResponse(BaseModel):
@@ -18,7 +18,16 @@ class InterviewSession(BaseModel):
 
 
 class CreateSessionRequest(BaseModel):
-    role: str
+    role: str = Field(min_length=2, max_length=100)
+
+    @field_validator("role")
+    @classmethod
+    def validate_role(cls, value: str) -> str:
+        value = value.strip()
+        if len(value) < 2:
+            raise ValueError(
+                "Role must contain at least 2 non-whitespace characters.")
+        return value
 
 
 class CreateSessionResponse(BaseModel):
@@ -29,7 +38,15 @@ class CreateSessionResponse(BaseModel):
 
 
 class SubmitAnswerRequest(BaseModel):
-    answer: str
+    answer: str = Field(min_length=1, max_length=10000)
+
+    @field_validator("answer")
+    @classmethod
+    def validate_answer(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Answer cannot be empty or whitespace only.")
+        return value
 
 
 class SubmitAnswerResponse(BaseModel):
@@ -47,4 +64,3 @@ class InterviewHistoryItem(BaseModel):
     status: str
     created_at: str
     updated_at: str
-

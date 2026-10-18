@@ -17,6 +17,11 @@ JWT_ACCESS_TOKEN_EXPIRE_MINUTES = int(
     os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "30")
 )
 
+if JWT_ACCESS_TOKEN_EXPIRE_MINUTES <= 0:
+    raise RuntimeError(
+        "JWT_ACCESS_TOKEN_EXPIRE_MINUTES must be greater than zero"
+    )
+
 if not JWT_SECRET_KEY:
     raise RuntimeError("JWT_SECRET_KEY is missing from the .env file")
 

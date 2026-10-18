@@ -101,3 +101,38 @@ def test_completed_session_generates_report_from_sqlite(
     assert report.answered_questions == 2
     assert report.overall_score == 9.0
     assert len(report.question_reports) == 2
+
+
+def test_user_cannot_access_another_users_session(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        database,
+        "DATABASE_PATH",
+        tmp_path / "test_session_ownership.db",
+    )
+    database.init_db()
+
+    with database.get_connection() as connection:
+        connection.executemany(
+            """
+            INSERT INTO users (user_id, name, email, password_hash)
+            VALUES (?, ?, ?, ?)
+            """,
+            [
+                (1, "User One", "one@example.com", "test-hash"),
+                (2, "User Two", "two@example.com", "test-hash"),
+            ],
+        )
+
+    session = session_service.create_session(
+        user_id=1,
+        role="Python Developer",
+        questions=["What is Python?"],
+    )
+
+    # The owner can retrieve the session.
+    owner_session = session_service.get_session(session.session_id, 1)
+    assert owner_session is not None
+
+    # A different user must not retrieve the owner's session.
+    other_user_session = session_service.get_session(session.session_id, 2)
+    assert other_user_session is None
