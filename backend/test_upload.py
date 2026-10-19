@@ -1,3 +1,4 @@
+from app.rate_limiter import limiter
 from pathlib import Path
 from unittest.mock import patch
 
@@ -30,6 +31,7 @@ def restore_dependency_overrides():
 @pytest.fixture
 def authenticated_client():
     original_overrides = app.dependency_overrides.copy()
+    original_limiter_enabled = limiter.enabled
 
     app.dependency_overrides[get_current_user] = (
         lambda: UserResponse(
@@ -40,9 +42,14 @@ def authenticated_client():
         )
     )
 
+    limiter.enabled = True
+    limiter.reset()
+
     try:
         yield client
     finally:
+        limiter.reset()
+        limiter.enabled = original_limiter_enabled
         app.dependency_overrides.clear()
         app.dependency_overrides.update(original_overrides)
 

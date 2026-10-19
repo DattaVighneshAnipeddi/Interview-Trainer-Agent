@@ -1,7 +1,8 @@
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from app.rate_limiter import limiter
 from app.auth_dependencies import get_current_user
 from app.schemas.auth import UserResponse
 from app.schemas.evaluation import EvaluationResult
@@ -75,11 +76,13 @@ def handle_gemini_error(exc: Exception) -> HTTPException:
     "/questions",
     response_model=InterviewQuestionsResponse,
 )
+@limiter.limit("5/minute")
 def generate_questions(
-    request: InterviewRequest,
+    request: Request,
+    interview_request: InterviewRequest,
     current_user: UserResponse = Depends(get_current_user),
 ):
-    role = request.role.strip()
+    role = interview_request.role.strip()
 
     if not role:
         raise HTTPException(
@@ -113,11 +116,13 @@ def generate_questions(
     "/session",
     response_model=CreateSessionResponse,
 )
+@limiter.limit("5/minute")
 def start_session(
-    request: CreateSessionRequest,
+    request: Request,
+    session_request: CreateSessionRequest,
     current_user: UserResponse = Depends(get_current_user),
 ):
-    role = request.role.strip()
+    role = session_request.role.strip()
 
     if not role:
         raise HTTPException(
@@ -168,9 +173,11 @@ def start_session(
     "/session/{session_id}/answer",
     response_model=SubmitAnswerResponse,
 )
+@limiter.limit("10/minute")
 def submit_interview_answer(
+    request: Request,
     session_id: str,
-    request: SubmitAnswerRequest,
+    answer_request: SubmitAnswerRequest,
     current_user: UserResponse = Depends(get_current_user),
 ):
     session = get_session(
@@ -190,7 +197,7 @@ def submit_interview_answer(
             detail="Interview session is already completed",
         )
 
-    answer = request.answer.strip()
+    answer = answer_request.answer.strip()
 
     if not answer:
         raise HTTPException(
@@ -261,12 +268,14 @@ def submit_interview_answer(
     "/evaluate",
     response_model=EvaluationResult,
 )
+@limiter.limit("10/minute")
 def evaluate(
-    request: EvaluationRequest,
+    request: Request,
+    evaluation_request: EvaluationRequest,
     current_user: UserResponse = Depends(get_current_user),
 ):
-    question = request.question.strip()
-    answer = request.answer.strip()
+    question = evaluation_request.question.strip()
+    answer = evaluation_request.answer.strip()
 
     if not question:
         raise HTTPException(

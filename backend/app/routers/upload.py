@@ -3,8 +3,9 @@ import logging
 import os
 import tempfile
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 
+from app.rate_limiter import limiter
 from app.auth_dependencies import get_current_user
 from app.schemas.auth import UserResponse
 from app.schemas.resume import Resume
@@ -23,7 +24,9 @@ CHUNK_SIZE = 64 * 1024  # 64 KB
 
 
 @router.post("/upload-resume", response_model=Resume)
+@limiter.limit("5/minute")
 async def upload_resume(
+    request: Request,
     file: UploadFile = File(...),
     current_user: UserResponse = Depends(get_current_user),
 ):
@@ -67,8 +70,7 @@ async def upload_resume(
                     detail="The uploaded file is not a valid PDF.",
                 )
 
-        resume = process_resume(temp_path)
-        return resume
+        return process_resume(temp_path)
 
     except HTTPException:
         raise
@@ -81,7 +83,8 @@ async def upload_resume(
         ) from exc
 
     except GeminiServiceUnavailable as exc:
-        logger.warning("Resume processing stopped because Gemini is unavailable.")
+        logger.warning(
+            "Resume processing stopped because Gemini is unavailable.")
         raise HTTPException(
             status_code=503,
             detail="AI processing is temporarily unavailable.",
