@@ -1,24 +1,13 @@
+
 import fitz  # PyMuPDF
 
 
 def extract_text_from_pdf(file_path: str) -> str:
-    """
-    Extract text from a PDF file.
+    """Extract text from a PDF file and ensure the document is closed."""
+    text_parts = []
 
-    Args:
-        file_path (str): Path to the uploaded PDF.
+    with fitz.open(file_path) as pdf:
+        for page in pdf:
+            text_parts.append(page.get_text())
 
-    Returns:
-        str: Extracted text.
-    """
-
-    text = ""
-
-    pdf = fitz.open(file_path)
-
-    for page in pdf:
-        text += page.get_text()
-
-    pdf.close()
-
-    return text
+    return "\n".join(text_parts)

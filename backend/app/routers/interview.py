@@ -75,7 +75,10 @@ def handle_gemini_error(exc: Exception) -> HTTPException:
     "/questions",
     response_model=InterviewQuestionsResponse,
 )
-def generate_questions(request: InterviewRequest):
+def generate_questions(
+    request: InterviewRequest,
+    current_user: UserResponse = Depends(get_current_user),
+):
     role = request.role.strip()
 
     if not role:
@@ -258,7 +261,10 @@ def submit_interview_answer(
     "/evaluate",
     response_model=EvaluationResult,
 )
-def evaluate(request: EvaluationRequest):
+def evaluate(
+    request: EvaluationRequest,
+    current_user: UserResponse = Depends(get_current_user),
+):
     question = request.question.strip()
     answer = request.answer.strip()
 

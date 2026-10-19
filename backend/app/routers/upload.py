@@ -1,10 +1,12 @@
 
 import logging
 import os
-import shutil
+import tempfile
 
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
+from app.auth_dependencies import get_current_user
+from app.schemas.auth import UserResponse
 from app.schemas.resume import Resume
 from app.services.resume_processor import process_resume
 from app.services.gemini_service import (
@@ -12,52 +14,78 @@ from app.services.gemini_service import (
     GeminiServiceUnavailable,
 )
 
-
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-UPLOAD_DIR = "app/uploads"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
+MAX_UPLOAD_SIZE = 5 * 1024 * 1024  # 5 MB
+CHUNK_SIZE = 64 * 1024  # 64 KB
 
 
 @router.post("/upload-resume", response_model=Resume)
-async def upload_resume(file: UploadFile = File(...)):
+async def upload_resume(
+    file: UploadFile = File(...),
+    current_user: UserResponse = Depends(get_current_user),
+):
     if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(
             status_code=400,
             detail="Please upload a valid PDF resume.",
         )
 
-    file_path = os.path.join(
-        UPLOAD_DIR,
-        os.path.basename(file.filename),
-    )
+    temp_path = None
 
     try:
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+        with tempfile.NamedTemporaryFile(
+            prefix="resume_",
+            suffix=".pdf",
+            delete=False,
+        ) as temp_file:
+            temp_path = temp_file.name
+            total_size = 0
 
-        resume = process_resume(file_path)
+            while True:
+                chunk = await file.read(CHUNK_SIZE)
+
+                if not chunk:
+                    break
+
+                total_size += len(chunk)
+
+                if total_size > MAX_UPLOAD_SIZE:
+                    raise HTTPException(
+                        status_code=413,
+                        detail="Resume file exceeds the 5 MB limit.",
+                    )
+
+                temp_file.write(chunk)
+
+        with open(temp_path, "rb") as pdf_file:
+            if pdf_file.read(5) != b"%PDF-":
+                raise HTTPException(
+                    status_code=400,
+                    detail="The uploaded file is not a valid PDF.",
+                )
+
+        resume = process_resume(temp_path)
         return resume
+
+    except HTTPException:
+        raise
 
     except GeminiQuotaExceeded as exc:
         logger.warning("Resume processing stopped due to Gemini quota limits.")
         raise HTTPException(
             status_code=429,
-            detail=str(exc),
+            detail="AI processing quota exceeded. Please try again later.",
         ) from exc
 
     except GeminiServiceUnavailable as exc:
-        logger.warning(
-            "Resume processing stopped because Gemini is unavailable.")
+        logger.warning("Resume processing stopped because Gemini is unavailable.")
         raise HTTPException(
             status_code=503,
-            detail=str(exc),
+            detail="AI processing is temporarily unavailable.",
         ) from exc
-
-    except HTTPException:
-        raise
 
     except Exception as exc:
         logger.exception("Resume upload failed.")
@@ -68,3 +96,9 @@ async def upload_resume(file: UploadFile = File(...)):
 
     finally:
         await file.close()
+
+        if temp_path and os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except OSError:
+                logger.exception("Failed to delete temporary resume file.")
