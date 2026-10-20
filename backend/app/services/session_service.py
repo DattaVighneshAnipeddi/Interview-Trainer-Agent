@@ -1,3 +1,4 @@
+
 import json
 import uuid
 
@@ -6,8 +7,23 @@ from app.schemas.evaluation import EvaluationResult
 from app.schemas.session import InterviewSession, InterviewResponse
 
 
-def _save_session(session: InterviewSession) -> None:
-    """Insert or update an interview session in SQLite."""
+def _session_from_row(row) -> InterviewSession:
+    """Convert a database row into an InterviewSession."""
+    return InterviewSession(
+        session_id=row["session_id"],
+        user_id=row["user_id"],
+        role=row["role"],
+        questions=json.loads(row["questions_json"]),
+        current_question=row["current_question"],
+        responses=[
+            InterviewResponse.model_validate(response)
+            for response in json.loads(row["responses_json"])
+        ],
+    )
+
+
+def _save_new_session(session: InterviewSession) -> None:
+    """Insert a new session without allowing an existing session to be overwritten."""
     with get_connection() as connection:
         connection.execute(
             """
@@ -20,12 +36,6 @@ def _save_session(session: InterviewSession) -> None:
                 responses_json
             )
             VALUES (?, ?, ?, ?, ?, ?)
-            ON CONFLICT(session_id) DO UPDATE SET
-                role = excluded.role,
-                questions_json = excluded.questions_json,
-                current_question = excluded.current_question,
-                responses_json = excluded.responses_json,
-                updated_at = CURRENT_TIMESTAMP
             """,
             (
                 session.session_id,
@@ -34,13 +44,39 @@ def _save_session(session: InterviewSession) -> None:
                 json.dumps(session.questions),
                 session.current_question,
                 json.dumps(
-                    [
-                        response.model_dump()
-                        for response in session.responses
-                    ]
+                    [response.model_dump() for response in session.responses]
                 ),
             ),
         )
+
+
+def _update_session(session: InterviewSession, user_id: int) -> None:
+    """Update a session only when it belongs to the specified user."""
+    with get_connection() as connection:
+        cursor = connection.execute(
+            """
+            UPDATE interview_sessions
+            SET role = ?,
+                questions_json = ?,
+                current_question = ?,
+                responses_json = ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE session_id = ? AND user_id = ?
+            """,
+            (
+                session.role,
+                json.dumps(session.questions),
+                session.current_question,
+                json.dumps(
+                    [response.model_dump() for response in session.responses]
+                ),
+                session.session_id,
+                user_id,
+            ),
+        )
+
+        if cursor.rowcount != 1:
+            raise ValueError("Interview session not found")
 
 
 def create_session(
@@ -56,7 +92,7 @@ def create_session(
         questions=questions,
     )
 
-    _save_session(session)
+    _save_new_session(session)
     return session
 
 
@@ -79,17 +115,7 @@ def get_session(
     if row is None:
         return None
 
-    return InterviewSession(
-        session_id=row["session_id"],
-        user_id=row["user_id"],
-        role=row["role"],
-        questions=json.loads(row["questions_json"]),
-        current_question=row["current_question"],
-        responses=[
-            InterviewResponse.model_validate(response)
-            for response in json.loads(row["responses_json"])
-        ],
-    )
+    return _session_from_row(row)
 
 
 def submit_answer(
@@ -118,7 +144,9 @@ def submit_answer(
     )
 
     session.current_question += 1
-    _save_session(session)
+
+    # Enforce ownership again in the database UPDATE.
+    _update_session(session, user_id)
 
     return session
 

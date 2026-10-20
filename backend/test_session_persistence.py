@@ -136,3 +136,77 @@ def test_user_cannot_access_another_users_session(tmp_path, monkeypatch):
     # A different user must not retrieve the owner's session.
     other_user_session = session_service.get_session(session.session_id, 2)
     assert other_user_session is None
+
+def test_session_update_rejects_another_users_session(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(
+        database,
+        "DATABASE_PATH",
+        tmp_path / "test_unauthorized_update.db",
+    )
+    database.init_db()
+
+    with database.get_connection() as connection:
+        connection.executemany(
+            """
+            INSERT INTO users (user_id, name, email, password_hash)
+            VALUES (?, ?, ?, ?)
+            """,
+            [
+                (1, "User One", "one@example.com", "test-hash"),
+                (2, "User Two", "two@example.com", "test-hash"),
+            ],
+        )
+
+    session = session_service.create_session(
+        user_id=1,
+        role="Python Developer",
+        questions=["What is Python?"],
+    )
+
+    # A session update must not succeed for a different user.
+    try:
+        session_service._update_session(session, user_id=2)
+    except ValueError as exc:
+        assert str(exc) == "Interview session not found"
+    else:
+        raise AssertionError("Unauthorized session update was allowed")
+
+    # Verify that the original session remains unchanged.
+    restored = session_service.get_session(session.session_id, user_id=1)
+    assert restored is not None
+    assert restored.current_question == 0
+    assert restored.responses == []
+
+
+def test_legacy_unowned_session_is_not_accessible(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(
+        database,
+        "DATABASE_PATH",
+        tmp_path / "test_legacy_session.db",
+    )
+    database.init_db()
+
+    with database.get_connection() as connection:
+        connection.execute(
+            """
+            INSERT INTO users (user_id, name, email, password_hash)
+            VALUES (1, 'Test User', 'test@example.com', 'test-hash')
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO interview_sessions (
+                session_id, user_id, role, questions_json,
+                current_question, responses_json
+            )
+            VALUES ('legacy-session', NULL, 'Python Developer', '[]', 0, '[]')
+            """
+        )
+
+    assert session_service.get_session(
+        "legacy-session", user_id=1
+    ) is None
