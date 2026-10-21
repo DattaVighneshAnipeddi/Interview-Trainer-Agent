@@ -1,4 +1,6 @@
+import os
 import uuid
+from pathlib import Path
 from typing import Optional
 
 import chromadb
@@ -6,8 +8,18 @@ import chromadb
 from app.rag.embedding import generate_embedding
 from app.schemas.resume import Resume
 
+
 # Persistent ChromaDB Client
-client = chromadb.PersistentClient(path="./chroma_db")
+CHROMA_DB_PATH = Path(
+    os.getenv(
+        "CHROMA_DB_PATH",
+        str(Path(__file__).resolve().parent.parent.parent / "chroma_db"),
+    )
+).resolve()
+
+CHROMA_DB_PATH.mkdir(parents=True, exist_ok=True)
+
+client = chromadb.PersistentClient(path=str(CHROMA_DB_PATH))
 
 # Resume Collection
 collection = client.get_or_create_collection(
@@ -52,12 +64,8 @@ def store_resume(resume: Resume):
 
     resume_id = str(uuid.uuid4())
 
-    # -------------------------
     # Personal Information
-    # -------------------------
-
     if resume.personal_info.name:
-
         add_resume_chunk(
             chunk_id=f"{resume_id}_profile",
             text=f"Candidate Name: {resume.personal_info.name}",
@@ -65,12 +73,8 @@ def store_resume(resume: Resume):
             resume_id=resume_id,
         )
 
-    # -------------------------
     # Skills
-    # -------------------------
-
     for index, skill in enumerate(resume.skills):
-
         add_resume_chunk(
             chunk_id=f"{resume_id}_skill_{index}",
             text=skill,
@@ -78,12 +82,8 @@ def store_resume(resume: Resume):
             resume_id=resume_id,
         )
 
-    # -------------------------
     # Education
-    # -------------------------
-
     if resume.education:
-
         education_parts = [
             resume.education.degree,
             resume.education.branch,
@@ -98,7 +98,6 @@ def store_resume(resume: Resume):
         )
 
         if education_text:
-
             add_resume_chunk(
                 chunk_id=f"{resume_id}_education",
                 text=education_text,
@@ -106,12 +105,8 @@ def store_resume(resume: Resume):
                 resume_id=resume_id,
             )
 
-    # -------------------------
     # Projects
-    # -------------------------
-
     for index, project in enumerate(resume.projects):
-
         project_text = (
             f"{project.title}. "
             f"{project.description}"
@@ -124,12 +119,8 @@ def store_resume(resume: Resume):
             resume_id=resume_id,
         )
 
-    # -------------------------
     # Experience
-    # -------------------------
-
     for index, experience in enumerate(resume.experience):
-
         experience_parts = [
             experience.role,
             experience.company,
@@ -149,12 +140,8 @@ def store_resume(resume: Resume):
             resume_id=resume_id,
         )
 
-    # -------------------------
     # Certifications
-    # -------------------------
-
     for index, certification in enumerate(resume.certifications):
-
         add_resume_chunk(
             chunk_id=f"{resume_id}_certification_{index}",
             text=certification,

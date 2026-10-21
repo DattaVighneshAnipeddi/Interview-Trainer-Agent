@@ -1,11 +1,32 @@
-from typing import Iterator
+import os
+import sqlite3
 from pathlib import Path
 from contextlib import contextmanager
-import sqlite3
+from typing import Iterator
 
-DATABASE_PATH = (
-    Path(__file__).resolve().parent.parent / "interview_trainer.db"
-)
+
+# Persistent data directory.
+# Locally, defaults to the backend directory.
+# On Render, set DATA_DIR=/var/data.
+DATA_DIR = Path(
+    os.getenv(
+        "DATA_DIR",
+        str(Path(__file__).resolve().parent.parent),
+    )
+).resolve()
+
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+
+# Allow an explicit database path, otherwise use DATA_DIR.
+DATABASE_PATH = Path(
+    os.getenv(
+        "DATABASE_PATH",
+        str(DATA_DIR / "interview_trainer.db"),
+    )
+).resolve()
+
+DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 
 @contextmanager
